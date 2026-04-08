@@ -203,19 +203,15 @@ export default function App() {
         style={{ transform: `rotate(${player.rotation || 0}deg)` }}
         onPointerDown={(e) => handlePointerDown(e, player)}
       >
-        {/* 旋轉手柄 (僅在場上且模式為移動時顯示) */}
-        {isOnCourt && mode === 'move' && (
-          <div 
-            className="absolute -top-5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-white rounded-full border border-slate-300 shadow-sm flex items-center justify-center cursor-alias z-20"
-            onPointerDown={(e) => handlePointerDown(e, player, 'rotate')}
-          >
-            <RotateCcw size={8} className="text-slate-400" />
-          </div>
-        )}
-
-        {/* 手部 (判斷正背面) */}
-        <div className={`absolute -top-0.5 -left-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30`} />
-        <div className={`absolute -top-0.5 -right-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30`} />
+        {/* 手部 (判斷正背面 + 旋轉控制) */}
+        <div 
+          className={`absolute -top-0.5 -left-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30 z-20 ${isOnCourt && mode === 'move' ? 'cursor-alias' : ''}`} 
+          onPointerDown={(e) => isOnCourt && mode === 'move' ? handlePointerDown(e, player, 'rotate') : null}
+        />
+        <div 
+          className={`absolute -top-0.5 -right-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30 z-20 ${isOnCourt && mode === 'move' ? 'cursor-alias' : ''}`} 
+          onPointerDown={(e) => isOnCourt && mode === 'move' ? handlePointerDown(e, player, 'rotate') : null}
+        />
         
         <div className={`absolute w-6 h-6 ${mainColor} rounded-full shadow-md border-2 ${borderColor}`} />
         <div className="z-10 flex items-center justify-center">
@@ -266,7 +262,7 @@ export default function App() {
               </marker>
             </defs>
             <rect width="1500" height="2400" fill="#1e3a8a" />
-            <rect x="300" y="300" width="900" height="1800" fill="#ea580c" stroke="#ffffff" strokeWidth="10" />
+            <rect x="300" y="300" width="900" height="1800" fill="#7dd3fc" stroke="#ffffff" strokeWidth="10" />
             <line x1="300" y1="1200" x2="1200" y2="1200" stroke="#ffffff" strokeWidth="14" />
             <line x1="300" y1="900" x2="1200" y2="900" stroke="#ffffff" strokeWidth="10" />
             <line x1="300" y1="1500" x2="1200" y2="1500" stroke="#ffffff" strokeWidth="10" />
@@ -279,7 +275,7 @@ export default function App() {
           {/* 路徑繪製層 */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
             {paths.map(path => {
-              const strokeColor = path.type === 'player-path' ? '#ef4444' : path.type === 'ball-path' ? '#ffffff' : '#10b981';
+              const strokeColor = path.type === 'player-path' ? '#ef4444' : path.type === 'ball-path' ? '#000000' : '#10b981';
               const isDashed = path.type === 'player-path';
               const hasArrow = path.type === 'direction';
               
@@ -301,7 +297,7 @@ export default function App() {
               <polyline
                 points={currentPath.map(p => `${p.x},${p.y}`).join(' ')}
                 fill="none"
-                stroke={mode === 'player-path' ? '#ef4444' : mode === 'ball-path' ? '#ffffff' : '#10b981'}
+                stroke={mode === 'player-path' ? '#ef4444' : mode === 'ball-path' ? '#000000' : '#10b981'}
                 strokeWidth="0.6"
                 strokeDasharray={mode === 'player-path' ? "1.2, 1.2" : "none"}
                 markerEnd={mode === 'direction' ? "url(#arrowhead-green)" : "none"}
