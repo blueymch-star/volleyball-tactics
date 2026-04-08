@@ -39,12 +39,13 @@ export default function App() {
 
   // 拖曳狀態管理
   const [dragState, setDragState] = useState<any>(null);
+  const pointersRef = useRef<Map<number, { x: number, y: number }>>(new Map());
   
   // 參考節點，用於計算場地邊界
   const courtRef = useRef<HTMLDivElement>(null);
 
   // 處理游標/觸控按下事件
-  const handlePointerDown = (e: React.PointerEvent, player: any, dragType: 'move' | 'rotate' = 'move') => {
+    const handlePointerDown = (e: React.PointerEvent, player: any) => {
     if (mode !== 'move') return;
     // 防止預設行為
     e.preventDefault();
@@ -57,14 +58,17 @@ export default function App() {
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
 
+    // 記錄當前點位
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
     setDragState({
       player,
-      dragType,
+      primaryId: e.pointerId,
+      secondaryId: null,
       offsetX: e.clientX - centerX,
       offsetY: e.clientY - centerY,
       currentX: e.clientX,
       currentY: e.clientY,
-      startRotation: player.rotation || 0,
       centerX,
       centerY
     });
@@ -87,11 +91,24 @@ export default function App() {
   useEffect(() => {
     if (!dragState && !currentPath) return;
 
+    const handlePointerDownGlobal = (e: PointerEvent) => {
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (dragState && !dragState.secondaryId && e.pointerId !== dragState.primaryId) {
+        setDragState((prev: any) => prev ? { ...prev, secondaryId: e.pointerId } : null);
+      }
+    };
+
     const handlePointerMove = (e: PointerEvent) => {
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
       if (dragState) {
-        if (dragState.dragType === 'rotate') {
-          const dx = e.clientX - dragState.centerX;
-          const dy = e.clientY - dragState.centerY;
+        const p1 = pointersRef.current.get(dragState.primaryId);
+        const p2 = dragState.secondaryId ? pointersRef.current.get(dragState.secondaryId) : null;
+
+        if (p1 && p2) {
+          // 旋轉模式：計算兩指間的角度
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
           const angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
           
           setPlayers(prev => prev.map(p => 
@@ -100,14 +117,15 @@ export default function App() {
           
           setDragState((prev: any) => ({
             ...prev,
-            currentX: e.clientX,
-            currentY: e.clientY
+            currentX: p1.x,
+            currentY: p1.y
           }));
-        } else {
+        } else if (p1) {
+          // 移動模式
           setDragState((prev: any) => ({
             ...prev,
-            currentX: e.clientX,
-            currentY: e.clientY
+            currentX: p1.x,
+            currentY: p1.y
           }));
         }
       } else if (currentPath && courtRef.current) {
@@ -115,14 +133,15 @@ export default function App() {
         const x = ((e.clientX - rect.left) / rect.width) * 100;
         const y = ((e.clientY - rect.top) / rect.height) * 100;
         
-        // 限制在球場內或稍微超出
         setCurrentPath(prev => prev ? [...prev, { x, y }] : null);
       }
     };
 
     const handlePointerUp = (e: PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+
       if (dragState) {
-        if (dragState.dragType === 'move') {
+        if (e.pointerId === dragState.primaryId) {
           if (!courtRef.current) return;
           
           const courtRect = courtRef.current.getBoundingClientRect();
@@ -146,8 +165,10 @@ export default function App() {
               p.id === dragState.player.id ? { ...p, x: null, y: null, rotation: 0 } : p
             ));
           }
+          setDragState(null);
+        } else if (e.pointerId === dragState.secondaryId) {
+          setDragState((prev: any) => prev ? { ...prev, secondaryId: null } : null);
         }
-        setDragState(null);
       } else if (currentPath) {
         if (currentPath.length > 1) {
           setPaths(prev => [...prev, { 
@@ -160,10 +181,12 @@ export default function App() {
       }
     };
 
+    window.addEventListener('pointerdown', handlePointerDownGlobal);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
 
     return () => {
+      window.removeEventListener('pointerdown', handlePointerDownGlobal);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
@@ -203,15 +226,9 @@ export default function App() {
         style={{ transform: `rotate(${player.rotation || 0}deg)` }}
         onPointerDown={(e) => handlePointerDown(e, player)}
       >
-        {/* 手部 (判斷正背面 + 旋轉控制) */}
-        <div 
-          className={`absolute -top-0.5 -left-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30 z-20 ${isOnCourt && mode === 'move' ? 'cursor-alias' : ''}`} 
-          onPointerDown={(e) => isOnCourt && mode === 'move' ? handlePointerDown(e, player, 'rotate') : null}
-        />
-        <div 
-          className={`absolute -top-0.5 -right-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30 z-20 ${isOnCourt && mode === 'move' ? 'cursor-alias' : ''}`} 
-          onPointerDown={(e) => isOnCourt && mode === 'move' ? handlePointerDown(e, player, 'rotate') : null}
-        />
+        {/* 手部 (判斷正背面) */}
+        <div className={`absolute -top-0.5 -left-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30`} />
+        <div className={`absolute -top-0.5 -right-0.5 w-2 h-2 ${mainColor} rounded-full border border-white/30`} />
         
         <div className={`absolute w-6 h-6 ${mainColor} rounded-full shadow-md border-2 ${borderColor}`} />
         <div className="z-10 flex items-center justify-center">
@@ -236,7 +253,10 @@ export default function App() {
           {dragState.player.type === 'ball' ? (
             <Volleyball size={20} className="text-yellow-500 drop-shadow-xl" />
           ) : (
-            <div className="relative w-6 h-6 flex items-center justify-center" style={{ transform: `rotate(${dragState.player.rotation || 0}deg)` }}>
+            <div 
+              className={`relative w-6 h-6 flex items-center justify-center transition-transform duration-200 ${dragState.secondaryId ? 'scale-125' : ''}`} 
+              style={{ transform: `rotate(${players.find(p => p.id === dragState.player.id)?.rotation || 0}deg)` }}
+            >
                <div className={`absolute -top-0.5 -left-0.5 w-2 h-2 ${dragState.player.role === 'libero' ? 'bg-[#f87171]' : 'bg-[#3b82f6]'} rounded-full border border-white/30`} />
                <div className={`absolute -top-0.5 -right-0.5 w-2 h-2 ${dragState.player.role === 'libero' ? 'bg-[#f87171]' : 'bg-[#3b82f6]'} rounded-full border border-white/30`} />
                <div className={`absolute w-6 h-6 ${dragState.player.role === 'libero' ? 'bg-[#f87171]' : 'bg-[#3b82f6]'} rounded-full shadow-xl border-2 ${dragState.player.role === 'libero' ? 'border-[#ef4444]' : 'border-[#2563eb]'}`} />
